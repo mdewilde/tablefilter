@@ -11,24 +11,57 @@
 body {
 	font-family: freesans, sans-serif;
 }
-table, th, td {
-	border: 1px solid #ccc;
+table {
+	width: 100%;
 	border-collapse: collapse;
+}
+th, td {
+	border: 1px solid #ccc;
 	padding: 1.5em;
 }
-input {
+input[type=text] {
 	width: 40em;
 }
 div {
 	margin:1.5em 0;
 }
+label {
+	font-weight: bold;
+	width: 20em;
+	display: inline-block;
+}
 </style>
 </head>
 <body>
 	<div>
-		<h3>Plain filter</h3>
-		<input type="text" data-tablefilter placeholder="input with attribute data-tablefilter">
+		<label>
+			Plain filter<br>
+			<code>data-tablefilter</code>
+		</label>
+		<input type="text" data-tablefilter>
 	</div>
+
+	<div>
+		<label>
+			Checkbox toggle<br>
+			<code>value="google"</code><br>
+			<code>data-tablefilter-onclass="email"</code>
+		</label>
+		<input type="checkbox" data-tablefilter data-tablefilter-onclass="email" value="google">
+	</div>
+
+	<div>
+		<label>
+			Select<br>
+			<code>data-tablefilter-onclass="cctype"</code>		
+		</label>
+		<select data-tablefilter data-tablefilter-onclass="cctype">
+			<option value="jcb">jcb</option>
+			<option value="visa">visa</option>
+			<option value="mastercard">mastercard</option>
+		</select>
+	</div>
+	
 	<table data-tablefiltered>
 		<thead>
 			<tr>
