@@ -51,13 +51,14 @@
 		font-weight: bold;
 		font-size: 14px;
 		padding: .5em;
+		background-color: #ffd;
 	}
 </style>
 </head>
 <body>
 
 	<div class="count">displaying <span id="rowcount"></span> rows</div>
-
+<span type="text" data-tablefilter></span>
 	<table class="filters">
 		<tr>
 			<td class="code">data-tablefilter</td>
@@ -101,7 +102,6 @@
 			<td class="filter"><input type="text" data-tablefilter data-tablefilter-onclass="age" data-tablefilter-max></td>
 		</tr>
 	</table>
-
 
 
 	<div>
@@ -8123,25 +8123,22 @@
 		</tbody>
 	</table>
 	<script type="text/javascript">
-		tablefilter();
 
-		// call tablefilter a second time as part of the test
-		tablefilter();
-		
 		var callback = function() {
-			var nodes = document.getElementsByTagName('tr');
+			var nodes = document.querySelectorAll('tr[data-gender]');
 			var c = 0;
 			for (var i = 0; i < nodes.length; i++) {
 				if (nodes[i].offsetParent) {
 					c++;
 				}
 			}
-			console.log(document.getElementById('rowcount'));
 			document.getElementById('rowcount').textContent = '' + c;
 		};
 		
 		tablefilter(callback);
 
-	</script>
+
+		
+		</script>
 </body>
 </html>

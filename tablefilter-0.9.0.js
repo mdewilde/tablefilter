@@ -10,54 +10,45 @@
 
 var tablefilter = (function(){
 
-	var counter = 0;
-	var filterTimeout;
-	
-	
-	
-	var _init = function(callback) {
-		_destroy();
-		var list = document.querySelectorAll('[data-tablefilter]');
-		for (var i = 0; i < list.length; ++i) {
-			var filter = new _filter(list[i]);
-			if (filter.valid) {
-				if (typeof callback === 'function') {
-					filter.callback = function() {callback()};
-				} else {
-					filter.callback = function() {};
-				}
-				filter.attach();
-				filter.run();
-			} else {
-				_strip(list[i]);
-			}
+	/**
+	 * Constructor function for internal _filter instances.
+	 */
+	var _filter = function(node) {
+
+		this.presets = _filter.getPresets(node);
+		if (!this.presets) {
+			return false;
 		}
 
-	};
-	
-	var _destroy = function() {
-		var nodes = document.querySelectorAll('[data-tablefilter-ids]');
-		for (var i = 0; i < nodes.length; ++i) {
-			nodes[i].removeAttribute('data-tablefilter-ids');
-			nodes[i].style.display = 'table-row';
+		this.node = node;
+
+		// method will be contain, exclude, min or max
+		this.method = _filter.parseMethod(this);
+		if (!this.method) {
+			return false;
 		}
-		var filters = document.querySelectorAll('[data-tablefilter]');
-		for (var i = 0; i < filters.length; ++i) {
-			var filter = filters[i].tablefilter;
-			if (filter && filter instanceof _filter) {
-				filter.detach();
-			}
-			filters[i].tablefilter = undefined;
+
+		// the extractor determines which text this _filter will evaluate
+		this.extractor = _filter.parseExtractor(this);
+		if (!this.extractor) {
+			return false;
 		}
-		counter = 0;
-	};
-	
+		
+		if (!node.hasAttribute('data-tablefilter-id')) {
+			node.setAttribute('data-tablefilter-id', '_' + (_filter.counter++) + '_');
+		}
+		this.id = node.getAttribute('data-tablefilter-id');
+
+		this.node.tablefilter = this;
+		this.valid = true;
+		
+	}
 	/**
 	 * Attach this filter's associated event(s)
 	 */
 	_filter.prototype.attach = function() {
-		for (var i = 0; i < this.triggers.length; i++) {
-			this.node.addEventListener(this.triggers[i], this.countdown);
+		for (var i = 0; i < this.presets.triggers.length; i++) {
+			this.node.addEventListener(this.presets.triggers[i], this.countdown);
 		}
 	};
 
@@ -65,115 +56,17 @@ var tablefilter = (function(){
 	 * Remove this filter's associated event(s)
 	 */
 	_filter.prototype.detach = function() {
-		for (var i = 0; i < this.triggers.length; i++) {
-			this.node.removeEventListener(this.triggers[i], this.countdown);
+		for (var i = 0; i < this.presets.triggers.length; i++) {
+			this.node.removeEventListener(this.presets.triggers[i], this.countdown);
 		}
-	};
-
-
-	
-	
-	var _log = function(s) {
-		'console' in window && console.log(s);
 	};
 	
-	/**
-	 * Test if the given argument is an HTML DOM element.
-	 */
-	var htmlElementSupported = (typeof HTMLElement === 'object');
-	var _isNode = function(o) {
-		if (!o) {
-			return false;
-		}
-		if (htmlElementSupported) {
-			return o instanceof HTMLElement; 
-		} else {
-			return typeof o === 'object' && 'tagName' in o;
-		}
-	};
-
-	/**
-	 * Strip all tablefilter attributes from the given node.
-	 */
-	var _strip = function(node) {
-		if (_isNode(node)) {
-			node.removeAttribute('data-tablefilter');
-			node.removeAttribute('data-tablefilter-method');
-			node.removeAttribute('data-tablefilter-id');
-			node.removeAttribute('data-tablefilter-onclass');
-			node.removeAttribute('data-tablefilter-byattribute');
-		}
-	};
-
-//	/**
-//	 * Toggle display of all rows that have received or lost filtering
-//	 */
-//	var _apply = function() {
-//		var rows = document.querySelectorAll('[data-tablefilter-ids]');
-//		for (var i = 0; i < rows.length; ++i) {
-//			var ids = rows[i].getAttribute('data-tablefilter-ids');
-//			if (ids && ids.trim().length) {
-//				rows[i].style.display = 'none';
-//		    } else {
-//    	    	rows[i].style.display = 'table-row';
-//		    }
-//		}
-//	};
-
-	/**
-	 * Check if a node has a specific class (case sensitive)
-	 */
-	var _hasClass = function(node, clazz) {
-		return (' ' + node.className + ' ').indexOf(' ' + clazz + ' ') > -1;
-	}
-
-	/**
-	 * Determine filter tag type
-	 */
-	var _parseType = function(node) {
-		var tag = node.tagName.toLowerCase();
-		if (tag === 'select') {
-			return 'select';
-		} else if (tag === 'textarea') {
-			return 'input';
-		} else if (tag === 'input') {
-			var type = node.getAttribute('type');
-			if (typeof type === 'string') {
-				type = type.trim().toLowerCase();
-			}
-			if (type === 'button' || type === 'color' || type === 'file' || type === 'hidden' || type === 'image' || type === 'radio' || type === 'range' || type === 'submit') {
-				_log(tag + ' is not supported');
-				return false;
-			} else if (type === 'checkbox') {
-				return 'checkbox';
-			} else {
-				return 'input';
-			}
-		} else {
-			_log(tag + ' is not supported');
-			return false;
-		}
-	}
-
-	/**
-	 * Parse the data-tablefilter-toggle attribute
-	 */
-	var _parseToggle = function(node) {
-		var toggle = node.getAttribute('data-tablefilter-toggle');
-		if (!toggle || !toggle.length) {
-			return 'tr';
-		} else {
-			return toggle.trim().toLowerCase();
-		}
-	}
-
-
 	/* METHODS */
 	
 	/**
 	 * Parse the data-tablefilter-method into appropriate function
 	 */
-	var _parseMethod = function(instance) {
+	_filter.parseMethod = function(instance) {
 		// the exact method is determined by hierarchy
 		// as it is possible to add more than one attribute
 		if (instance.node.hasAttribute('data-tablefilter-contain')) {
@@ -192,7 +85,7 @@ var tablefilter = (function(){
 			return instance.methods.max;
 		}
 		return instance.methods.contain;
-	}
+	};
 	
 	_filter.prototype.methods = {
 			
@@ -204,9 +97,9 @@ var tablefilter = (function(){
 			var regExp = new RegExp(this.node.value, 'i');
 			for (var i = 0; i < rows.length; i++) {
 				if (this.extractor(rows[i]).search(regExp) > -1) {
-					this.removeFilterId(rows[i]);
+					this.show(rows[i]);
 				} else {
-					this.addFilterId(rows[i]);
+					this.hide(rows[i]);
 				}
 			}
 		},
@@ -218,9 +111,9 @@ var tablefilter = (function(){
 			var rows = this.gather();
 			for (var i = 0; i < rows.length; i++) {
 				if (this.extractor(rows[i]) === this.node.value) {
-					this.removeFilterId(rows[i]);
+					this.show(rows[i]);
 				} else {
-					this.addFilterId(rows[i]);
+					this.hide(rows[i]);
 				}
 			}
 		},
@@ -233,9 +126,9 @@ var tablefilter = (function(){
 			var rows = this.gather();
 			for (var i = 0; i < rows.length; i++) {
 				if (this.extractor(rows[i]).search(regExp) > -1) {
-					this.addFilterId(rows[i]);
+					this.hide(rows[i]);
 				} else {
-					this.removeFilterId(rows[i]);
+					this.show(rows[i]);
 				}
 			}
 		},
@@ -256,9 +149,9 @@ var tablefilter = (function(){
 			for (var i = 0; i < rows.length; i++) {
 				var int = this.extractInt(rows[i]);
 				if (typeof int === 'number' && (int%1) === 0 && int >= min){
-					this.removeFilterId(rows[i]);
+					this.show(rows[i]);
 				} else {
-					this.addFilterId(rows[i]);
+					this.hide(rows[i]);
 				}
 			}
 		},
@@ -279,9 +172,9 @@ var tablefilter = (function(){
 			for (var i = 0; i < rows.length; i++) {
 				var int = this.extractInt(rows[i]);
 				if (typeof int === 'number' && (int % 1) === 0 && int <= max) {
-					this.removeFilterId(rows[i]);
+					this.show(rows[i]);
 				} else {
-					this.addFilterId(rows[i]);
+					this.hide(rows[i]);
 				}
 			}
 		}
@@ -293,7 +186,7 @@ var tablefilter = (function(){
 	/**
 	 * Determine which extractor logic to use for the given filter
 	 */
-	var _parseExtractor = function(instance) {
+	_filter.parseExtractor = function(instance) {
 		
 		// filter only inside elements with this class
 		instance.clazz = instance.node.getAttribute('data-tablefilter-onclass');
@@ -311,7 +204,7 @@ var tablefilter = (function(){
 			return instance.extractors.text;
 		}
 		
-	}
+	};
 	
 	_filter.prototype.extractors = {
 
@@ -326,7 +219,7 @@ var tablefilter = (function(){
 		 * Extract the text content of the node and/or any descendants with clazz
 		 */
 		textInClass : function(node) {
-			if (_hasClass(node)) {
+			if (_filter.hasClass(node)) {
 				return node.textContent;
 			}
 			var string = '';
@@ -371,15 +264,50 @@ var tablefilter = (function(){
 	};
 	
 	/**
-	 * Collect all table rows that need to be evaluated by this filter
+	 * Remove this filter's id from the given row.
+	 * Reveal the row if no other filters are active on it.
+	 */
+	_filter.prototype.show = function(row) {
+		var ids = row.getAttribute('data-tablefilter-ids');
+		if (ids) {
+			ids = ids.replace(this.id, '');
+			row.setAttribute('data-tablefilter-ids', ids);
+			if (!ids.length) {
+				row.style.display = 'table-row';
+			}
+		}
+	};
+		
+	/**
+	 * Add this filter's id to the given row.
+	 * Hide the row.
+	 */
+	_filter.prototype.hide = function(row) {
+		var ids = row.getAttribute('data-tablefilter-ids');
+		if (!ids) {
+			ids = this.id;
+		} else if (ids.indexOf(this.id) === -1) {
+			ids += this.id;
+		}
+		row.setAttribute('data-tablefilter-ids', ids);		
+		if (ids.length) {
+			row.style.display = 'none';
+		}
+	};
+
+	/**
+	 * Collect all table rows that must be evaluated by this filter
 	 */
 	_filter.prototype.gather = function() {
 		var rows = [];
-		var tables = document.querySelectorAll('table[data-tablefiltered]');
+		var tables = document.getElementsByTagName('table');
 		for (var i = 0; i < tables.length; i++) {
+			if (!tables[i].hasAttribute('data-tablefiltered')) {
+				continue;
+			}
 			var trs = tables[i].getElementsByTagName('tr');
 			for (var j = 0; j < trs.length; j++) {
-				if (this.filtersRow(trs[j])) {
+				if (trs[j].getElementsByTagName('td').length > 0) {
 					rows.push(trs[j]);
 				}
 			}
@@ -387,28 +315,16 @@ var tablefilter = (function(){
 		return rows;
 	};
 
-	/**
-	 * Evaluate whether the given row should be filtered by this filter
-	 */
-	_filter.prototype.filtersRow = function(tr) {
-		var tds = tr.getElementsByTagName('td');
-		if (tds.length > 0) {
-			for (var i = 0; i < tds.length; i++) {
-				if (this.isOnClass && !_hasClass(tds[i], this.onClass)) {
-					continue;
-				}
-				return true;
-			}
-		}
-		return false;
-	};
-
 	_filter.prototype.extractInt = function(node) {
 		return parseInt(this.extractor(node));
 	};
 
-	_filter.prototype.isRemove = function() {
-		if (this.type === 'checkbox') {
+	/**
+	 * Evaluate whether we should undo the filter's effects based on the node's
+	 * current value
+	 */
+	_filter.prototype.isUndo = function() {
+		if (this.presets.type === 'checkbox') {
 			return !this.node.checked;
 		} else {
 			return !this.node.value;
@@ -421,154 +337,152 @@ var tablefilter = (function(){
 	_filter.prototype.undo = function() {
 		var rows = this.gather();
 		for (var i = 0; i < rows.length; i++) {
-			this.removeFilterId(rows[i]);
+			this.show(rows[i]);
 		}
 	};
-	
-	/**
-	 * Removes this filter's id from the given row
-	 */
-	_filter.prototype.removeFilterId = function(row) {
-//		row = this.getTagToToggle(tag);
-//		if (!_isNode(row)) {
-//			return false;
-//		}
-		var ids = row.getAttribute('data-tablefilter-ids');
-		if (ids) {
-			ids = ids.replace(this.id, '').trim();
-			row.setAttribute('data-tablefilter-ids', ids);
-			if (!ids.length) {
-				row.style.display = 'table-row';
-			}
-		}
-	};
-
-	/**
-	 * Removes this filter's id from the given row
-	 */
-	_filter.prototype.addFilterId = function(row) {
-//		tag = this.getTagToToggle(tag);
-//		if (!_isNode(tag)) {
-//			return false;
-//		}
-		var ids = row.getAttribute('data-tablefilter-ids');
-		if (!ids) {
-			ids = this.id;
-		} else if (ids.indexOf(this.id) === -1) {
-			ids += ' ' + this.id;
-		}
-		if (ids.length) {
-			row.style.display = 'none';
-		}
-		row.setAttribute('data-tablefilter-ids', ids);		
-	};
-	
-//	_filter.prototype.getTagToToggle = function(tag) {
-//		if (!_isNode(tag)) {
-//			return false;
-//		}
-//		var tagName = tag.tagName.toLowerCase();
-//		while (typeof tagName === 'string' && this.toggle !== tagName) {
-//			tag = tag.parentNode;
-//			if (_isNode(tag)) {
-//				tagName = tag.tagName.toLowerCase();
-//			} else {
-//				tagName = null;
-//			}
-//			if (typeof tag === 'undefined' || tag === null) {
-//				tagName = null;
-//			} else {
-//				tagName = tag.tagName.toLowerCase();
-//			}
-//		}
-//		if (this.toggle === tagName) {
-//			return tag;
-//		} else {
-//			return null;
-//		}
-//	};
-//
-//	
 	
 	/**
 	 * Count down after triggering event occurred
 	 */
 	_filter.prototype.countdown = function() {
-		if (filterTimeout) {
-			clearTimeout(filterTimeout);
+		if (this.tablefilter.filterTimeout) {
+			clearTimeout(this.tablefilter.filterTimeout);
 		}
-		filterTimeout = setTimeout(function() {
+		this.tablefilter.filterTimeout = setTimeout(function() {
 			this.tablefilter.run();
-		}.bind(this), 750);
+		}.bind(this), this.tablefilter.presets.timeout);
 	};
 	
+	/**
+	 * Default time to wait after input before taking action
+	 */
+	_filter.prototype.valid = false;
 	_filter.prototype.run = function() {
 		console.time('run');
-		if (this.isRemove()) {
+		if (this.isUndo()) {
 			this.undo();
 		} else {
 			this.method();
 		}
-		this.callback();
+		_filter.callback();
 		console.timeEnd('run');
 	};
+
+	_filter.counter = 0;
 	
-	_filter.prototype.timeout = 750;
-	_filter.prototype.valid = false;
+	_filter.callback = function() {};
+	
+	_filter.destroy = function() {
+		var nodes = document.querySelectorAll('[data-tablefilter-ids]');
+		for (var i = 0; i < nodes.length; ++i) {
+			nodes[i].removeAttribute('data-tablefilter-ids');
+			nodes[i].style.display = 'table-row';
+		}
+		var filters = document.querySelectorAll('[data-tablefilter]');
+		for (var j = 0; j < filters.length; ++j) {
+			var filter = filters[j].tablefilter;
+			if (filter && filter instanceof _filter) {
+				filter.detach();
+			}
+			filters[j].tablefilter = undefined;
+		}
+		_filter.counter = 0;
+	};
+	
+	/**
+	 * Strip all tablefilter attributes from the given node.
+	 */
+	_filter.strip = function(node) {
+		if (typeof node === 'object' && 'removeAttribute' in node) {
+			node.removeAttribute('data-tablefilter');
+			node.removeAttribute('data-tablefilter-id');
+			node.removeAttribute('data-tablefilter-contain');
+			node.removeAttribute('data-tablefilter-exact');
+			node.removeAttribute('data-tablefilter-exclude');
+			node.removeAttribute('data-tablefilter-min');
+			node.removeAttribute('data-tablefilter-max');
+			node.removeAttribute('data-tablefilter-onclass');
+			node.removeAttribute('data-tablefilter-byattribute');
+		}
+	};
 
 	/**
-	 * Constructor function for creating _filter instances.
-	 * @param node : a plain JavaScript DOM element
+	 * Check if a node has a specific class (case sensitive)
 	 */
-	function _filter(node) {
+	_filter.hasClass = function(node, clazz) {
+		return (' ' + node.className + ' ').indexOf(' ' + clazz + ' ') > -1;
+	};
 
-		// type will be input, checkbox or select
-		this.type = _parseType(node);
-		if (!this.type) {
-			return false;
-		}
-
-		this.node = node;
-		
-		// method will be contain, exclude, min or max
-		this.method = _parseMethod(this);
-		if (!this.method) {
-			return false;
-		}
-
-		// the extractor determines which text this _filter will evaluate
-		this.extractor = _parseExtractor(this);
-		if (!this.extractor) {
-			return false;
-		}
-		
-		this.toggle = _parseToggle(node);
-
-		if (!node.hasAttribute('data-tablefilter-id')) {
-			node.setAttribute('data-tablefilter-id', '_' + (counter++) + '_');
-		}
-		this.id = node.getAttribute('data-tablefilter-id');
-
-		
-		if (this.type === 'checkbox') {
-			if (!this.node.value || !this.node.value.length) {
-				_log('checkbox should have a value to work properly with tablefilter')
+	/**
+	 * Determine filter tag type
+	 */
+	_filter.getPresets = function(node) {
+		var tag = node.tagName.toLowerCase();
+		if (tag === 'select') {
+			return {
+				type : 'select',
+				timeout : 50,
+				triggers : [ 'change', 'keyup' ]
+			};
+		} else if (tag === 'textarea') {
+			return {
+				type : 'input',
+				timeout : 500,
+				triggers : [ 'keyup' ]
+			};
+		} else if (tag === 'input') {
+			var type = node.getAttribute('type');
+			if (typeof type === 'string') {
+				type = type.trim().toLowerCase();
+			}
+			if (type === 'button' || type === 'submit') {
 				return false;
 			}
-			this.timeout = 50;
-			this.triggers = ['change'];
-		} else if (this.type === 'select') {
-			this.timeout = 50;
-			this.triggers = ['change','keyup'];
+			if (type === 'color' || type === 'file' || type === 'hidden' || type === 'image') {
+				return false;
+			}
+			if (type === 'radio' || type === 'range') {
+				// we may be able to use these
+				return false;
+			}
+			if (type === 'checkbox') {
+				if (!node.value || !node.value.length) {
+					return false;
+				}
+				return {
+					type : 'checkbox',
+					timeout : 50,
+					triggers : [ 'change' ]
+				};
+			} else {
+				return {
+					type : 'input',
+					timeout : 500,
+					triggers : [ 'keyup' ]
+				};
+			}
 		} else {
-			this.triggers = ['keyup'];
+			return false;
 		}
-		
-		this.node.tablefilter = this;
-		this.valid = true;
-		
-	}
+	};
+
+	_filter.init = function(callback) {
+		_filter.destroy();
+		if (typeof callback === 'function') {
+			_filter.callback = callback;
+		}
+		var list = document.querySelectorAll('[data-tablefilter]');
+		for (var i = 0; i < list.length; ++i) {
+			var filter = new _filter(list[i]);
+			if (filter.valid) {
+				filter.attach();
+				filter.run();
+			} else {
+				_filter.strip(list[i]);
+			}
+		}
+	};
 	
-	return _init;
+	return _filter.init;
 	
 })();
