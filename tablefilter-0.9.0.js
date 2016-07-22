@@ -10,19 +10,23 @@
 
 var tablefilter = (function(){
 
-	var filters = {};
-	var htmlElementSupported = (typeof HTMLElement === 'object');
 	var counter = 0;
 	var filterTimeout;
 	
 	
-	var _init = function() {
-
+	
+	var _init = function(callback) {
+		_destroy();
 		var list = document.querySelectorAll('[data-tablefilter]');
 		for (var i = 0; i < list.length; ++i) {
 			var filter = new _filter(list[i]);
 			if (filter.valid) {
-				filters[filter.id] = filter;
+				if (typeof callback === 'function') {
+					filter.callback = function() {callback()};
+				} else {
+					filter.callback = function() {};
+				}
+				filter.attach();
 				filter.run();
 			} else {
 				_strip(list[i]);
@@ -31,6 +35,44 @@ var tablefilter = (function(){
 
 	};
 	
+	var _destroy = function() {
+		var nodes = document.querySelectorAll('[data-tablefilter-ids]');
+		for (var i = 0; i < nodes.length; ++i) {
+			nodes[i].removeAttribute('data-tablefilter-ids');
+			nodes[i].style.display = 'table-row';
+		}
+		var filters = document.querySelectorAll('[data-tablefilter]');
+		for (var i = 0; i < filters.length; ++i) {
+			var filter = filters[i].tablefilter;
+			if (filter && filter instanceof _filter) {
+				filter.detach();
+			}
+			filters[i].tablefilter = undefined;
+		}
+		counter = 0;
+	};
+	
+	/**
+	 * Attach this filter's associated event(s)
+	 */
+	_filter.prototype.attach = function() {
+		for (var i = 0; i < this.triggers.length; i++) {
+			this.node.addEventListener(this.triggers[i], this.countdown);
+		}
+	};
+
+	/**
+	 * Remove this filter's associated event(s)
+	 */
+	_filter.prototype.detach = function() {
+		for (var i = 0; i < this.triggers.length; i++) {
+			this.node.removeEventListener(this.triggers[i], this.countdown);
+		}
+	};
+
+
+	
+	
 	var _log = function(s) {
 		'console' in window && console.log(s);
 	};
@@ -38,6 +80,7 @@ var tablefilter = (function(){
 	/**
 	 * Test if the given argument is an HTML DOM element.
 	 */
+	var htmlElementSupported = (typeof HTMLElement === 'object');
 	var _isNode = function(o) {
 		if (!o) {
 			return false;
@@ -62,45 +105,26 @@ var tablefilter = (function(){
 		}
 	};
 
-	/**
-	 * Toggle display of all rows that have received or lost filtering
-	 */
-	var _apply = function() {
-		var rows = document.querySelectorAll('[data-tablefilter-ids]');
-		for (var i = 0; i < rows.length; ++i) {
-			var ids = rows[i].getAttribute('data-tablefilter-ids');
-			if (ids && ids.trim().length) {
-				rows[i].style.display = 'none';
-		    } else {
-    	    	rows[i].style.display = 'table-row';
-		    }
-		}
-	};
+//	/**
+//	 * Toggle display of all rows that have received or lost filtering
+//	 */
+//	var _apply = function() {
+//		var rows = document.querySelectorAll('[data-tablefilter-ids]');
+//		for (var i = 0; i < rows.length; ++i) {
+//			var ids = rows[i].getAttribute('data-tablefilter-ids');
+//			if (ids && ids.trim().length) {
+//				rows[i].style.display = 'none';
+//		    } else {
+//    	    	rows[i].style.display = 'table-row';
+//		    }
+//		}
+//	};
 
 	/**
 	 * Check if a node has a specific class (case sensitive)
 	 */
 	var _hasClass = function(node, clazz) {
 		return (' ' + node.className + ' ').indexOf(' ' + clazz + ' ') > -1;
-	}
-
-	/**
-	 * Detach the tablefilter instance for the given node, if any
-	 */
-	var _detach = function(node) {
-		if (!_isNode(node)) {
-			return false;
-		}
-		var id = node.getAttribute('data-tablefilter-id');
-		if (id) {
-			var filter = filters[id];
-			if (typeof filter !== 'tablefilter') {
-				return false;
-			}
-			filter.destroy();
-			console.log(filter);
-			_log('tablefilter: destroy TODO');
-		}
 	}
 
 	/**
@@ -143,133 +167,209 @@ var tablefilter = (function(){
 		}
 	}
 
+
+	/* METHODS */
+	
 	/**
 	 * Parse the data-tablefilter-method into appropriate function
 	 */
-	var _parseMethod = function(instance, node) {
-		var method = node.getAttribute('data-tablefilter-method');
-		if (method && method.length) {
-			method = method.trim().toLowerCase();
-			switch (method) {
-				case 'contain':
-					return instance.methods.contain;
-				case 'exclude':
-					return instance.methods.exclude;
-				case 'min':
-					return instance.methods.min;
-				case 'max':
-					return instance.methods.max;
-				default:
-					_log('filter.methods._parse() : ' + method + ' method is not supported');
-					return false;
-			}
-		} else {
+	var _parseMethod = function(instance) {
+		// the exact method is determined by hierarchy
+		// as it is possible to add more than one attribute
+		if (instance.node.hasAttribute('data-tablefilter-contain')) {
 			return instance.methods.contain;
 		}
+		if (instance.node.hasAttribute('data-tablefilter-exact')) {
+			return instance.methods.exact;
+		}
+		if (instance.node.hasAttribute('data-tablefilter-exclude')) {
+			return instance.methods.exclude;
+		}
+		if (instance.node.hasAttribute('data-tablefilter-min')) {
+			return instance.methods.min;
+		}
+		if (instance.node.hasAttribute('data-tablefilter-max')) {
+			return instance.methods.max;
+		}
+		return instance.methods.contain;
 	}
 	
-	/**
-	 * Count down after triggering event occurred
-	 */
-	_filter.prototype.countdown = function() {
-		if (filterTimeout) {
-			clearTimeout(filterTimeout);
-		}
-		filterTimeout = setTimeout(function() {
-			this.run();
-		}.bind(this), 750);
-	};
-	
-	/**
-	 * Remove this filter and its associated events
-	 */
-	_filter.prototype.destroy = function() {
-		this.undo();
-		this.node.removeEventListener(this.trigger, this.ontrigger);
-		delete filters[this.id];
-	};
-	
-	_filter.prototype.timeout = 750;
-	_filter.prototype.valid = false;
-	_filter.prototype.isByAttribute = false;
+	_filter.prototype.methods = {
+			
+		/**
+		 * Display all rows that contain a given value
+		 */
+		contain : function() {
+			var rows = this.gather();
+			var regExp = new RegExp(this.node.value, 'i');
+			for (var i = 0; i < rows.length; i++) {
+				if (this.extractor(rows[i]).search(regExp) > -1) {
+					this.removeFilterId(rows[i]);
+				} else {
+					this.addFilterId(rows[i]);
+				}
+			}
+		},
+		
+		/**
+		 * Display all rows where filtered container has exact value
+		 */
+		exact : function() {
+			var rows = this.gather();
+			for (var i = 0; i < rows.length; i++) {
+				if (this.extractor(rows[i]) === this.node.value) {
+					this.removeFilterId(rows[i]);
+				} else {
+					this.addFilterId(rows[i]);
+				}
+			}
+		},
 
-	/**
-	 * Define method logic
-	 */
-	_filter.prototype.methods = {};
-	
-	/**
-	 * Display all rows that contain a given value
-	 */
-	_filter.prototype.methods.contain = function() {
-		var rows = this.gather();
-		var regExp = new RegExp(this.node.value, 'i');
-		for (var i = 0; i < rows.length; i++) {
-			if (this.extractText(rows[i]).search(regExp) > -1) {
-				this.removeFilterId(rows[i]);
-			} else {
-				this.addFilterId(rows[i]);
+		/**
+		 * Display all rows that do not contain a given value
+		 */
+		exclude : function() {
+			var regExp = new RegExp(this.node.value, 'i');
+			var rows = this.gather();
+			for (var i = 0; i < rows.length; i++) {
+				if (this.extractor(rows[i]).search(regExp) > -1) {
+					this.addFilterId(rows[i]);
+				} else {
+					this.removeFilterId(rows[i]);
+				}
 			}
-		}
-	};
-	
-	/**
-	 * Display all rows that do not contain a given value
-	 */
-	_filter.prototype.methods.exclude = function() {
-		var regExp = new RegExp(this.node.value, 'i');
-		var rows = this.gather();
-		for (var i = 0; i < rows.length; i++) {
-			if (this.extractText(rows[i]).search(regExp) > -1) {
-				this.addFilterId(rows[i]);
-			} else {
-				this.removeFilterId(rows[i]);
-			}
-		}
-	};
+		},
 
-	/**
-	 * Display all rows that that have a value equal to or greater than
-	 */
-	_filter.prototype.methods.min = function() {
-		var rows = this.gather();
-		for (var i = 0; i < rows.length; i++) {
-			var int = this.extractInt(rows[i]);
-			if (typeof int === 'number' && (int%1) === 0 && int >= val){
-				this.removeFilterId(rows[i]);
-			} else {
-				this.addFilterId(rows[i]);
+		/**
+		 * Display all rows that that have a value equal to or greater than
+		 */
+		min : function() {
+			var rows = this.gather();
+			var min = this.node.value;
+			if (!min || !min.length) {
+				this.undo();
+			}
+			min = parseInt(min);
+			if (typeof min !== 'number' || (min % 1) !== 0) {
+				this.undo();				
+			}
+			for (var i = 0; i < rows.length; i++) {
+				var int = this.extractInt(rows[i]);
+				if (typeof int === 'number' && (int%1) === 0 && int >= min){
+					this.removeFilterId(rows[i]);
+				} else {
+					this.addFilterId(rows[i]);
+				}
+			}
+		},
+		
+		/**
+		 * Display all rows that that have a value less than or equal to
+		 */
+		max : function() {
+			var rows = this.gather();
+			var max = this.node.value;
+			if (!max || !max.length) {
+				this.undo();
+			}
+			max = parseInt(max);
+			if (typeof max !== 'number' || (max % 1) !== 0) {
+				this.undo();				
+			}
+			for (var i = 0; i < rows.length; i++) {
+				var int = this.extractInt(rows[i]);
+				if (typeof int === 'number' && (int % 1) === 0 && int <= max) {
+					this.removeFilterId(rows[i]);
+				} else {
+					this.addFilterId(rows[i]);
+				}
 			}
 		}
+			
 	};
+	
+	/* EXTRACTORS */
 	
 	/**
-	 * Display all rows that that have a value less than or equal to
+	 * Determine which extractor logic to use for the given filter
 	 */
-	_filter.prototype.methods.max = function() {
-		var rows = this.gather();
-		for (var i = 0; i < rows.length; i++) {
-			var int = this.extractInt(rows[i]);
-			if (typeof int === 'number' && (int%1) === 0 && int <= val){
-				this.removeFilterId(rows[i]);
+	var _parseExtractor = function(instance) {
+		
+		// filter only inside elements with this class
+		instance.clazz = instance.node.getAttribute('data-tablefilter-onclass');
+		instance.attr = instance.node.getAttribute('data-tablefilter-byattribute');
+
+		if (instance.clazz) {
+			if (instance.attr) {
+				return instance.extractors.attrInClass;
 			} else {
-				this.addFilterId(rows[i]);
+				return instance.extractors.textInClass;
 			}
-		}
-	};
-	
-	_filter.prototype.run = function() {
-		console.time('run');
-		if (this.isRemove()) {
-			this.undo();
+		} else if (instance.attr) {
+			return instance.extractors.attr;
 		} else {
-			this.method();
+			return instance.extractors.text;
 		}
-	//	_apply();
-		console.timeEnd('run');
+		
+	}
+	
+	_filter.prototype.extractors = {
+
+		/**
+		 * Extract the full text content of the node (and all descendants)
+		 */
+		text : function(node) {
+			return node.textContent;
+		},
+
+		/**
+		 * Extract the text content of the node and/or any descendants with clazz
+		 */
+		textInClass : function(node) {
+			if (_hasClass(node)) {
+				return node.textContent;
+			}
+			var string = '';
+			var nodes = node.getElementsByClassName(this.clazz);
+			for (var i = 0; i < nodes.length; i++) {
+				string += nodes[i].textContent;
+			}
+			return string;
+		},
+		
+		/**
+		 * Extract the value of attr from this node and any descendant with attr
+		 */
+		attr : function(node) {
+			var nodes = [].slice.call(node.getElementsByTagName('*'));
+			nodes.push(node);
+			var string = '';
+			for (var i = 0; i < nodes.length; i++) {
+				var attr = nodes[i].getAttribute(this.attr);
+				if (attr) {
+					string += attr;
+				}
+			}
+			return string;
+		},
+		
+		/**
+		 * Extract the value of attr from this node and/or any descendant with attr and clazz
+		 */
+		attrInClass : function(node) {
+			var string = node.getAttribute(this.attr) || '';
+			var nodes = [].slice.call(node.getElementsByClassName(this.clazz));
+			for (var i = 0; i < nodes.length; i++) {
+				var attr = nodes[i].getAttribute(this.attr);
+				if (attr) {
+					string += attr;
+				}
+			}
+			return string;
+		}
+		
 	};
 	
-
 	/**
 	 * Collect all table rows that need to be evaluated by this filter
 	 */
@@ -303,28 +403,10 @@ var tablefilter = (function(){
 		return false;
 	};
 
-	/**
-	 * Extract the text against which to run this filter
-	 */
-	_filter.prototype.extractText = function(tr) {
-		if (!this.isByAttribute) {
-			return tr.textContent;
-		}
-		var es = [].slice.call(tr.getElementsByTagName('*'));
-		es.push(tr);
-		var s = '';
-		for (var i = 0; i < es.length; i++) {
-			var attr = es[i].getAttribute(this.byAttribute);
-			if (attr) {
-				s += attr;
-			}
-		}
-		return s;
+	_filter.prototype.extractInt = function(node) {
+		return parseInt(this.extractor(node));
 	};
 
-	_filter.prototype.extractInt = function(tag) {
-		return parseInt(this.extractText(tag));
-	};
 	_filter.prototype.isRemove = function() {
 		if (this.type === 'checkbox') {
 			return !this.node.checked;
@@ -408,7 +490,32 @@ var tablefilter = (function(){
 //
 //	
 	
+	/**
+	 * Count down after triggering event occurred
+	 */
+	_filter.prototype.countdown = function() {
+		if (filterTimeout) {
+			clearTimeout(filterTimeout);
+		}
+		filterTimeout = setTimeout(function() {
+			this.tablefilter.run();
+		}.bind(this), 750);
+	};
 	
+	_filter.prototype.run = function() {
+		console.time('run');
+		if (this.isRemove()) {
+			this.undo();
+		} else {
+			this.method();
+		}
+		this.callback();
+		console.timeEnd('run');
+	};
+	
+	_filter.prototype.timeout = 750;
+	_filter.prototype.valid = false;
+
 	/**
 	 * Constructor function for creating _filter instances.
 	 * @param node : a plain JavaScript DOM element
@@ -421,13 +528,20 @@ var tablefilter = (function(){
 			return false;
 		}
 
-
+		this.node = node;
+		
 		// method will be contain, exclude, min or max
-		this.method = _parseMethod(this, node);
+		this.method = _parseMethod(this);
 		if (!this.method) {
 			return false;
 		}
 
+		// the extractor determines which text this _filter will evaluate
+		this.extractor = _parseExtractor(this);
+		if (!this.extractor) {
+			return false;
+		}
+		
 		this.toggle = _parseToggle(node);
 
 		if (!node.hasAttribute('data-tablefilter-id')) {
@@ -436,44 +550,21 @@ var tablefilter = (function(){
 		this.id = node.getAttribute('data-tablefilter-id');
 
 		
-		// filter only inside elements with this class
-		this.onClass = node.getAttribute('data-tablefilter-onclass');
-		if (typeof this.onClass === 'undefined') {
-			this.onClass = null;
-		}
-		this.isOnClass = this.onClass !== null;
-
-		// filter on the contents of the given attribute, instead of element content
-		this.byAttribute = node.getAttribute('data-tablefilter-byattribute');
-		if (this.byAttribute) {
-			this.isByAttribute = true;
-		}
-
-		// keep a reference to our node
-		this.node = node;
-
-		// define trigger function
-		var _this = this;
-		function ontrigger() { 
-			_this.countdown();
-		}
-		
-		// attach the filter event
 		if (this.type === 'checkbox') {
 			if (!this.node.value || !this.node.value.length) {
-				_log('checkbox should have value set to work properly with tablefilter')
+				_log('checkbox should have a value to work properly with tablefilter')
 				return false;
 			}
 			this.timeout = 50;
-			this.node.addEventListener('change', ontrigger);
+			this.triggers = ['change'];
 		} else if (this.type === 'select') {
-			this.timeout = 10;
-			this.node.addEventListener('change', ontrigger);
-			this.node.addEventListener('keyup', ontrigger);
+			this.timeout = 50;
+			this.triggers = ['change','keyup'];
 		} else {
-			this.node.addEventListener('keyup', ontrigger);
+			this.triggers = ['keyup'];
 		}
-
+		
+		this.node.tablefilter = this;
 		this.valid = true;
 		
 	}
