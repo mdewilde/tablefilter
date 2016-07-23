@@ -1,10 +1,10 @@
 # tablefilter
 
-tablefilter is a JavaScript library for quick and powerful filtering of HTML tables.
+tablefilter is a JavaScript library for fast and powerful filtering of HTML tables.
 
-tablefilter is written in plain JavaScript without external dependencies.
+`tablefilter` is written in plain JavaScript and has no external dependencies.
 
-tablefilter uses [querySelectorAll](https://developer.mozilla.org/nl/docs/Web/API/Document/querySelectorAll). If older browser are part of your target audience, do verify compatibility at [caniuse](http://caniuse.com/#feat=queryselector).
+`tablefilter` uses [querySelectorAll](https://developer.mozilla.org/nl/docs/Web/API/Document/querySelectorAll). If older browser are part of your target audience, do verify compatibility at [caniuse](http://caniuse.com/#feat=queryselector).
 
 ### Demo
 		
@@ -16,19 +16,19 @@ The attribute `data-tablefilter` goes on any `input`, `textarea` or `select` ele
 
 The attribute `data-tablefiltered` goes on any `table` that will be filtered.
 
-To load the tablefilter, simply call
+To load the `tablefilter`, simply call
 
 ```javascript
 tablefilter();
 ```
 
-It is also possible to initialize the tablefilter with a callback function, which will be called each time a filter is changed.
+It is also possible to initialize the `tablefilter` with a callback function, which will be called each time a filter is changed.
 
 ```javascript
 tablefilter(callback);
 ```
 
-By default, tablefilter displays all rows that contain the value of the filter. Matching is case-insensitive.
+By default, `tablefilter` displays all rows that contain the value of the filter. Matching is case-insensitive.
 		
 Filtering **behavior** can be adjusted using any of the following attributes:
 
@@ -46,9 +46,9 @@ Filtering **scope** can be adjusted using any of the following attributes:
 * `data-tablefilter-onclass`: filter only text found in elements that have the name class
 * `data-tablefilter-byattribute`: filter on the value of the attribute in all considered elements
 
-tablefilter should be (re)initialized any time a filtering `input`, `textarea` or `select` element is added to the DOM.
+`tablefilter` should be (re)initialized any time a filtering `input`, `textarea` or `select` element is added to the DOM.
 
-It is not necessary that targeted `table` elements are already part of the DOM on tablefilter initialization.
+It is not necessary that targeted `table` elements are already part of the DOM on `tablefilter` initialization.
 
 ### Source code
 
@@ -60,4 +60,4 @@ Download this project
 * [tablefilter-0.9.0.min.js](https://www.ceau.be/tablefilter/tablefilter-0.9.0.min.js)
 
 ### License
-tablefilter is licensed under [the Apache 2.0 license](http://www.apache.org/licenses/LICENSE-2.0.txt).
+`tablefilter` is licensed under [the Apache 2.0 license](http://www.apache.org/licenses/LICENSE-2.0.txt).
