@@ -1,9 +1,8 @@
 # tablefilter
 
-tablefilter is a JavaScript library to enable filtering on a page.
+tablefilter is a JavaScript library for quick and powerful filtering of HTML tables.
 
-
-tablefilter is plain JavaScript without external dependencies.
+tablefilter is written in plain JavaScript without external dependencies.
 
 tablefilter uses [querySelectorAll](https://developer.mozilla.org/nl/docs/Web/API/Document/querySelectorAll). If older browser are part of your target audience, do verify compatibility at [caniuse](http://caniuse.com/#feat=queryselector).
 
