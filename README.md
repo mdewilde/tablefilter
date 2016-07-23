@@ -1,6 +1,6 @@
 # tablefilter
 
-tablefilter is a JavaScript library for fast and powerful filtering of HTML tables.
+`tablefilter` is a JavaScript library for fast and powerful filtering of HTML tables.
 
 `tablefilter` is written in plain JavaScript and has no external dependencies.
 
