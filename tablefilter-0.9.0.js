@@ -11,7 +11,7 @@
 var tablefilter = (function(){
 
 	/**
-	 * Constructor function for internal _filter instances.
+	 * Constructor for internal _filter instances.
 	 */
 	var _filter = function(node) {
 
@@ -42,7 +42,8 @@ var tablefilter = (function(){
 		this.node.tablefilter = this;
 		this.valid = true;
 		
-	}
+	};
+	
 	/**
 	 * Attach this filter's associated event(s)
 	 */
@@ -63,12 +64,8 @@ var tablefilter = (function(){
 	
 	/* METHODS */
 	
-	/**
-	 * Parse the data-tablefilter-method into appropriate function
-	 */
 	_filter.parseMethod = function(instance) {
-		// the exact method is determined by hierarchy
-		// as it is possible to add more than one attribute
+		// the exact method is determined in hierarchy
 		if (instance.node.hasAttribute('data-tablefilter-contain')) {
 			return instance.methods.contain;
 		}
@@ -90,102 +87,109 @@ var tablefilter = (function(){
 	_filter.prototype.methods = {
 			
 		/**
-		 * Display all rows that contain a given value
+		 * Display row if filtered text contains given value
 		 */
-		contain : function() {
-			var rows = this.gather();
-			var regExp = new RegExp(this.node.value, 'i');
-			for (var i = 0; i < rows.length; i++) {
-				if (this.extractor(rows[i]).search(regExp) > -1) {
-					this.show(rows[i]);
-				} else {
-					this.hide(rows[i]);
-				}
+		contain : function(row, value) {
+			if (this.extractor(row).search(value.regEx) > -1) {
+				this.show(row);
+			} else {
+				this.hide(row);
 			}
 		},
 		
 		/**
-		 * Display all rows where filtered container has exact value
+		 * Display row if filtered text is exact value
 		 */
-		exact : function() {
-			var rows = this.gather();
-			for (var i = 0; i < rows.length; i++) {
-				if (this.extractor(rows[i]) === this.node.value) {
-					this.show(rows[i]);
-				} else {
-					this.hide(rows[i]);
-				}
+		exact : function(row, value) {
+			if (this.extractor(row) === value.raw) {
+				this.show(row);
+			} else {
+				this.hide(row);
 			}
 		},
 
 		/**
-		 * Display all rows that do not contain a given value
+		 * Display row if filtered text does not contain given value
 		 */
-		exclude : function() {
-			var regExp = new RegExp(this.node.value, 'i');
-			var rows = this.gather();
-			for (var i = 0; i < rows.length; i++) {
-				if (this.extractor(rows[i]).search(regExp) > -1) {
-					this.hide(rows[i]);
-				} else {
-					this.show(rows[i]);
-				}
+		exclude : function(row, value) {
+			if (this.extractor(row).search(value.regEx) > -1) {
+				this.hide(row);
+			} else {
+				this.show(row);
 			}
 		},
 
 		/**
-		 * Display all rows that that have a value equal to or greater than
+		 * Display row if filtered value is equal to or greater than
 		 */
-		min : function() {
-			var rows = this.gather();
-			var min = this.node.value;
-			if (!min || !min.length) {
-				this.undo();
-			}
-			min = parseInt(min);
-			if (typeof min !== 'number' || (min % 1) !== 0) {
-				this.undo();				
-			}
-			for (var i = 0; i < rows.length; i++) {
-				var int = this.extractInt(rows[i]);
-				if (typeof int === 'number' && (int%1) === 0 && int >= min){
-					this.show(rows[i]);
-				} else {
-					this.hide(rows[i]);
+		min : function(row, value) {
+			var v = this.extractor(row);
+			if (v && v.length) {
+				v = v.toLowerCase();
+				if (v >= value.lowercase) {
+					this.show(row);
+					return;
 				}
 			}
+			this.hide(row);
 		},
 		
 		/**
-		 * Display all rows that that have a value less than or equal to
+		 * Display row if filtered value is less than or equal to
 		 */
-		max : function() {
-			var rows = this.gather();
-			var max = this.node.value;
-			if (!max || !max.length) {
-				this.undo();
+		max : function(row, value) {
+			var v = this.extractor(row);
+			if (v && v.length) {
+				v = v.toLowerCase();
+				if (v <= value.lowercase) {
+					this.show(row);
+					return;
+				}
 			}
-			max = parseInt(max);
-			if (typeof max !== 'number' || (max % 1) !== 0) {
-				this.undo();				
+			this.hide(row);
+		}
+
+	};
+
+	/**
+	 * Take input value and prepare parsed object for use with action callback
+	 */
+	_filter.prototype.prepareValue = function() {
+		if (!this.node.value) {
+			return false;
+		}
+		return {
+			raw : this.node.value,
+			regEx : new RegExp(this.node.value, 'i'),
+			lowercase : this.node.value.toLowerCase()
+		};
+	};
+	
+	/**
+	 * Do the actual filtering of table rows.
+	 * action callback determines filter behavior.
+	 */
+	_filter.prototype.filter = function() {
+		var value = this.prepareValue();
+		if (!value) {
+			return false;
+		}
+		var tables = document.getElementsByTagName('table');
+		for (var i = 0; i < tables.length; i++) {
+			if (!tables[i].hasAttribute('data-tablefiltered')) {
+				continue;
 			}
-			for (var i = 0; i < rows.length; i++) {
-				var int = this.extractInt(rows[i]);
-				if (typeof int === 'number' && (int % 1) === 0 && int <= max) {
-					this.show(rows[i]);
-				} else {
-					this.hide(rows[i]);
+			var rows = tables[i].getElementsByTagName('tr');
+			for (var j = 0; j < rows.length; j++) {
+				if (rows[j].getElementsByTagName('td').length > 0) {
+					this.method(rows[j], value);
 				}
 			}
 		}
-			
 	};
 	
 	/* EXTRACTORS */
 	
-	/**
-	 * Determine which extractor logic to use for the given filter
-	 */
 	_filter.parseExtractor = function(instance) {
 		
 		// filter only inside elements with this class
@@ -296,30 +300,6 @@ var tablefilter = (function(){
 	};
 
 	/**
-	 * Collect all table rows that must be evaluated by this filter
-	 */
-	_filter.prototype.gather = function() {
-		var rows = [];
-		var tables = document.getElementsByTagName('table');
-		for (var i = 0; i < tables.length; i++) {
-			if (!tables[i].hasAttribute('data-tablefiltered')) {
-				continue;
-			}
-			var trs = tables[i].getElementsByTagName('tr');
-			for (var j = 0; j < trs.length; j++) {
-				if (trs[j].getElementsByTagName('td').length > 0) {
-					rows.push(trs[j]);
-				}
-			}
-		}
-		return rows;
-	};
-
-	_filter.prototype.extractInt = function(node) {
-		return parseInt(this.extractor(node));
-	};
-
-	/**
 	 * Evaluate whether we should undo the filter's effects based on the node's
 	 * current value
 	 */
@@ -335,7 +315,7 @@ var tablefilter = (function(){
 	 * Remove the effects of this filter
 	 */
 	_filter.prototype.undo = function() {
-		var rows = this.gather();
+		var rows = document.getElementsByTagName('tr');
 		for (var i = 0; i < rows.length; i++) {
 			this.show(rows[i]);
 		}
@@ -353,16 +333,12 @@ var tablefilter = (function(){
 		}.bind(this), this.tablefilter.presets.timeout);
 	};
 	
-	/**
-	 * Default time to wait after input before taking action
-	 */
-	_filter.prototype.valid = false;
 	_filter.prototype.run = function() {
 		console.time('run');
 		if (this.isUndo()) {
 			this.undo();
 		} else {
-			this.method();
+			this.filter();
 		}
 		_filter.callback();
 		console.timeEnd('run');
@@ -442,7 +418,7 @@ var tablefilter = (function(){
 				return false;
 			}
 			if (type === 'radio' || type === 'range') {
-				// we may be able to use these
+				// TODO add behavior for these
 				return false;
 			}
 			if (type === 'checkbox') {
